@@ -13,6 +13,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
         # BakkesModSDK is committed as regular files (the .gitmodules entry is
         # vestigial - there is no real submodule gitlink), so a plain checkout
         # already has the SDK headers and pluginsdk.lib. Don't enable
