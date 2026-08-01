@@ -10,6 +10,8 @@ RLGym trains reinforcement-learning agents inside Rocket League. To do that, its
 
 > **Nothing on the Python side has to change.** Point RLGym at Rocket League the way you always have and add BakkesRLGymPlugin to your plugin folder; this plugin connects itself, builds the match, and drives it. <sub><sup>Note: If you are having difficulties starting Rocket League with rlgym Post-EAC I have provided rlgym v1.2.2 in this repository with updated launch mechanisms</sub></sup>
 
+<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/bcca8651-e3fc-4b0a-9bcf-ee466da81e15" />
+
 ## Installation
 
 **Prerequisites**
@@ -80,22 +82,12 @@ Settings live in the plugin's page in the BakkesMod settings window (F2 → Plug
 **Build**
 
 ```powershell
-git clone https://github.com/chrisrca/BakkesRLGymPlugin.git
+git clone https://github.com/chrisrca/BakkesRLGymPlugin.git --recurse-submodules
 cd BakkesRLGymPlugin
 msbuild BakkesRLGymPlugin\BakkesRLGymPlugin.vcxproj /p:Configuration=Release /p:Platform=x64 /m
 ```
 
 If a local BakkesMod plugins folder exists, the project's post-build step attempts to copy the DLL there automatically.
-
-## License
-
-The vendored dependencies retain their own licenses:
-
-- [Dear ImGui](https://github.com/ocornut/imgui) — [`libsrc/imgui/LICENSE.txt`](libsrc/imgui/LICENSE.txt)
-- cpp_sockets — [`libsrc/cpp_sockets/LICENSE.txt`](libsrc/cpp_sockets/LICENSE.txt)
-- [BakkesModSDK](https://github.com/bakkesmodorg/BakkesModSDK) — see [`BakkesModSDK/`](BakkesModSDK/)
-
-<!-- TODO: add a top-level LICENSE file for your own code (MIT is a common choice for BakkesMod plugins). -->
 
 ---
 
