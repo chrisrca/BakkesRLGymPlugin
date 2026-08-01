@@ -1,0 +1,36 @@
+name: Build plugin
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        # BakkesModSDK is committed as regular files (the .gitmodules entry is
+        # vestigial - there is no real submodule gitlink), so a plain checkout
+        # already has the SDK headers and pluginsdk.lib. Don't enable
+        # submodules, or checkout would try to fetch a submodule that isn't
+        # actually recorded.
+
+      - name: Add MSBuild to PATH
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Build (Release | x64)
+        run: msbuild BakkesRLGymPlugin\BakkesRLGymPlugin.vcxproj /p:Configuration=Release /p:Platform=x64 /m
+        # The post-build "copy to BakkesMod plugins folder" step is guarded by
+        # `if exist`, so it's a no-op here (that folder doesn't exist on the
+        # runner) and won't fail the build.
+
+      - name: Upload plugin DLL
+        uses: actions/upload-artifact@v4
+        with:
+          name: BakkesRLGymPlugin
+          path: BakkesRLGymPlugin\x64\Release\BakkesRLGymPlugin.dll
+          if-no-files-found: error
