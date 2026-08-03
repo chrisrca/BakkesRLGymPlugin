@@ -1,5 +1,7 @@
 #include "RLGymController.h"
 
+static constexpr float DEFAULT_BOOST_CONSUMPTION_RATE = 0.33333f;
+
 // C4996 is disabled for this function
 static void SetBotLoadoutExperimental(GameWrapper* gw, PriWrapper& pri, const BotLoadoutData& data) {
 #pragma warning(push)
@@ -248,20 +250,33 @@ void RLGymController::ProcessPendingBotRemoval() {
 	if (!server)
 		return;
 
+	// Re-derive who is actually a stray *right now*. PRI memory is pooled and reused,
+	// so an address queued a few ticks ago can now belong to a legitimate roster bot -
+	// removing it would delete that bot's car and nametag. Only remove addresses that
+	// are still strays in a fresh scan.
+	auto currentStrays = m_roster.FindStrayBotAddresses(server);
+	unordered_set<uintptr_t> stillStray(currentStrays.begin(), currentStrays.end());
+
 	auto pris = server.GetPRIs();
 	for (int i = pris.Count() - 1; i >= 0; i--) {
 		PriWrapper pri = pris.Get(i);
 		if (!pri)
 			continue;
 
-		auto it = m_strayBotAddressesPendingRemoval.find(pri.memory_address);
-		if (it == m_strayBotAddressesPendingRemoval.end())
+		if (!m_strayBotAddressesPendingRemoval.count(pri.memory_address))
 			continue;
+
+		if (!stillStray.count(pri.memory_address)) {
+			LOG("RLGymController::ProcessPendingBotRemoval: queued addr=" << pri.memory_address
+				<< " is no longer a stray (address likely reused by a roster bot), skipping removal.");
+			continue;
+		}
 
 		LOG("RLGymController::ProcessPendingBotRemoval: removing stray bot PRI queued from OnTick (addr=" << pri.memory_address << ").");
 		server.RemovePRI(pri);
-		m_strayBotAddressesPendingRemoval.erase(it);
 	}
+
+	m_strayBotAddressesPendingRemoval.clear();
 }
 
 void RLGymController::HandleMessage(const RLGymMessage::Message& msg) {
@@ -329,7 +344,9 @@ void RLGymController::ApplyPhysicsSettings(ServerWrapper server) {
 		if (!car)
 			continue;
 		if (auto boost = car.GetBoostComponent()) {
-			boost.SetBoostConsumptionRate(m_boostConsumption);
+			// rlgym's boost_consumption is a multiplier where 1.0 == normal, but
+			// SetBoostConsumptionRate wants an absolute rate
+			boost.SetBoostConsumptionRate(m_boostConsumption * DEFAULT_BOOST_CONSUMPTION_RATE);
 			if (infiniteBoost)
 				boost.SetBoostAmount(1.0f);
 		}
