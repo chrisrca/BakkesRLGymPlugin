@@ -117,4 +117,5 @@ private:
 	size_t m_mapRotationIndex = 0;
 	string m_mapRotationSpec = "EuroStadium_Night_P"; // brlgym_map value; ';'-delimited rotates in order
 	bool m_rotationPending = false; // a rotation start was issued; reset state on the next InitGame
+	long long m_newMatchGraceUntilMs = 0; // after a rotation, do no setup until this real-time deadline (lets the 3-2-1 countdown finish)
 };

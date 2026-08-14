@@ -220,6 +220,10 @@ void RLGymController::TryAutoJoinBlue() {
 	if (m_autoJoinedBlue || !m_haveConfig)
 		return;
 
+	// Don't touch teams during a freshly rotated match's countdown.
+	if (CUR_MS() < m_newMatchGraceUntilMs)
+		return;
+
 	// Must run off the global tick, during the pre-round "CHOOSE TEAM" screen
 	auto server = m_plugin->gameWrapper->GetGameEventAsServer();
 	if (!server)
@@ -288,7 +292,13 @@ string RLGymController::NextRotationMap() {
 // m_awaitingState: if rlgym is blocked waiting on a STATE reply for a step it
 // already sent, leaving those set lets the state loop answer it once the fresh
 // roster settles, instead of hanging the training script.
+// How long (real time) to leave a freshly rotated match completely alone so its
+// 3-2-1 kickoff countdown finishes and cars are fully spawned before we touch
+// anything. Real time (not ticks) so it holds even at high game_speed.
+static constexpr long long NEW_MATCH_GRACE_MS = 6000;
+
 void RLGymController::ResetForNewMatch() {
+	m_newMatchGraceUntilMs = CUR_MS() + NEW_MATCH_GRACE_MS;
 	m_roster.Reset();
 	m_autoJoinedBlue = false;
 	m_autoJoinAttempts = 0;
@@ -580,6 +590,13 @@ void RLGymController::SendState(ServerWrapper server) {
 void RLGymController::OnTick(ServerWrapper server) {
 	if (!server || !m_haveConfig)
 		return;
+
+	// Just rotated: force normal speed and do nothing else until the countdown is
+	// over. Touching cars mid-countdown (spawn/teleport) crashes the game.
+	if (CUR_MS() < m_newMatchGraceUntilMs) {
+		server.SetGameSpeed(1.0f);
+		return;
+	}
 
 	if (!server.GetbRoundActive()) {
 		if (m_roundActiveTicks != 0)
