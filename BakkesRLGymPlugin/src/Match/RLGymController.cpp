@@ -77,15 +77,19 @@ void RLGymController::OnLoad(BakkesMod::Plugin::BakkesModPlugin* plugin) {
 		[this](string eventName) { OnGlobalTick(); }
 	);
 
-	// Bot-fill suppression
-	plugin->gameWrapper->HookEventPost(
-		"Function TAGame.GameEvent_Soccar_TA.InitGame",
-		[this](string eventName) { DisableBotFill(eventName); }
-	);
-	plugin->gameWrapper->HookEventPost(
-		"Function TAGame.GameEvent_TA.InitGame",
-		[this](string eventName) { DisableBotFill(eventName); }
-	);
+	// Runs when a match initializes. If we just kicked off a map rotation, this is
+	// the new match coming up - reset our per-match bookkeeping here (on the fresh
+	// level) rather than inline on the old, still-running match.
+	auto onInitGame = [this](string eventName) {
+		if (m_rotationPending) {
+			LOG("RLGymController: new match InitGame after rotation, resetting per-match state.");
+			ResetForNewMatch();
+			m_rotationPending = false;
+		}
+		DisableBotFill(eventName);
+	};
+	plugin->gameWrapper->HookEventPost("Function TAGame.GameEvent_Soccar_TA.InitGame", onInitGame);
+	plugin->gameWrapper->HookEventPost("Function TAGame.GameEvent_TA.InitGame", onInitGame);
 	
 	plugin->cvarManager->registerNotifier("brlgym_local_body",
 		[this](std::vector<std::string> args) {
@@ -279,14 +283,12 @@ string RLGymController::NextRotationMap() {
 	return maps[m_mapRotationIndex];
 }
 
-void RLGymController::RebuildMatch(const string& reason) {
-	LOG("RLGymController::RebuildMatch: tearing down and recreating the match (" << reason << ").");
-
-	// Forget all per-match state so the normal InitGame -> settle -> claim -> spawn
-	// flow re-runs cleanly against the new level. We deliberately DON'T touch
-	// m_pendingInstr / m_awaitingState: if rlgym is blocked waiting on a STATE reply
-	// for a step it already sent, leaving those set lets the state loop answer it
-	// once the fresh roster settles, instead of hanging the training script.
+// Forget all per-match state so the next match's InitGame -> settle -> claim ->
+// spawn flow re-runs cleanly. We deliberately DON'T touch m_pendingInstr /
+// m_awaitingState: if rlgym is blocked waiting on a STATE reply for a step it
+// already sent, leaving those set lets the state loop answer it once the fresh
+// roster settles, instead of hanging the training script.
+void RLGymController::ResetForNewMatch() {
 	m_roster.Reset();
 	m_autoJoinedBlue = false;
 	m_autoJoinAttempts = 0;
@@ -297,11 +299,17 @@ void RLGymController::RebuildMatch(const string& reason) {
 	m_strayBotAddressesPendingRemoval.clear();
 	m_carAddressToSpecId.clear();
 	m_disableBotFillLoggedCounts.clear();
+}
 
+void RLGymController::RebuildMatch(const string& reason) {
+	// Just start the next map. We do NOT touch the current (still-running) match
+	// here - that churns a dying game and crashes. State is reset on the new
+	// match's InitGame instead (see the onInitGame hook, gated by m_rotationPending).
 	matchSettings.mapName = NextRotationMap();
-	LOG("RLGymController::RebuildMatch: next map = " << matchSettings.mapName << ".");
-	MatchSetup::CreateMatch(m_plugin, matchSettings);
-	m_matchStartedMs = CUR_MS();
+	m_rotationPending = true;
+	m_matchStartedMs = CUR_MS(); // restart the rotation clock now
+	LOG("RLGymController::RebuildMatch: starting next map " << matchSettings.mapName << " (" << reason << ").");
+	MatchSetup::CreateMatch(m_plugin, matchSettings, /*startDelayMs=*/0);
 }
 
 void RLGymController::ProcessPendingBotRemoval() {

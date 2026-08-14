@@ -52,8 +52,12 @@ private:
 	// Applies BotLoadoutData
 	void ApplyBotLoadouts(ServerWrapper server);
 
-	// Tear down the current match and recreate it on the next rotation map.
+	// Start the next rotation map. Per-match state resets on the new match's
+	// InitGame (see m_rotationPending), not inline here.
 	void RebuildMatch(const string& reason);
+
+	// Clears per-match bookkeeping so a freshly loaded match re-claims from scratch.
+	void ResetForNewMatch();
 
 	// Parse m_mapRotationSpec (the brlgym_map value; ';'-delimited) into individual
 	// map names, trimmed and in order. Always returns at least one entry.
@@ -112,4 +116,5 @@ private:
 	long long m_matchStartedMs = 0;
 	size_t m_mapRotationIndex = 0;
 	string m_mapRotationSpec = "EuroStadium_Night_P"; // brlgym_map value; ';'-delimited rotates in order
+	bool m_rotationPending = false; // a rotation start was issued; reset state on the next InitGame
 };
