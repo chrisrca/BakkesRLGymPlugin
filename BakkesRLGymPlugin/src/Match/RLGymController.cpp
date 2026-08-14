@@ -45,13 +45,21 @@ void RLGymController::OnLoad(BakkesMod::Plugin::BakkesModPlugin* plugin) {
 	});
 
 	CVarWrapper mapCvar = plugin->cvarManager->registerCvar("brlgym_map", "EuroStadium_Night_P",
-		"Map the created match loads");
+		"Map(s) the created match loads. Separate multiple with ';' to rotate through them in order (see brlgym_map_rotate_minutes)");
 	if (!mapCvar.getStringValue().empty())
-		matchSettings.mapName = mapCvar.getStringValue();
+		m_mapRotationSpec = mapCvar.getStringValue();
 	mapCvar.addOnValueChanged([this](std::string, CVarWrapper cvar) {
 		std::string v = cvar.getStringValue();
 		if (!v.empty())
-			matchSettings.mapName = v;
+			m_mapRotationSpec = v;
+	});
+
+	// Map-rotation backstop (minutes). 0 (default) disables.
+	CVarWrapper rotateCvar = plugin->cvarManager->registerCvar("brlgym_map_rotate_minutes", "0",
+		"Minutes between rebuilding the match on a fresh map to guarantee nametags refresh (0 = off)");
+	mapRotateMinutes = rotateCvar.getIntValue();
+	rotateCvar.addOnValueChanged([this](std::string, CVarWrapper cvar) {
+		mapRotateMinutes = MAX(cvar.getIntValue(), 0);
 	});
 
 	m_boostPads.Hook(plugin);
@@ -195,6 +203,13 @@ void RLGymController::OnGlobalTick() {
 
 	TryAutoJoinBlue();
 	ProcessPendingBotRemoval();
+
+	// Map-rotation backstop. Only once a match has actually been created.
+	if (m_matchCreateRequested && mapRotateMinutes > 0 && m_matchStartedMs != 0) {
+		long long elapsed = CUR_MS() - m_matchStartedMs;
+		if (elapsed >= (long long)mapRotateMinutes * 60 * 1000)
+			RebuildMatch(STR("scheduled every " << mapRotateMinutes << " min"));
+	}
 }
 
 void RLGymController::TryAutoJoinBlue() {
@@ -240,6 +255,53 @@ void RLGymController::ApplyBotLoadouts(ServerWrapper server) {
 		LOG("RLGymController::ApplyBotLoadouts: SetBotLoadout(body=" << carBodyId << ") on bot PRI addr=" << pri.memory_address
 			<< (car ? " (car already existed - appearance may not update)" : " (no car yet - should render correctly)"));
 	}
+}
+
+vector<string> RLGymController::ParseMapList() const {
+	vector<string> maps;
+	std::stringstream ss(m_mapRotationSpec);
+	string item;
+	while (std::getline(ss, item, ';')) {
+		size_t first = item.find_first_not_of(" \t\r\n");
+		if (first == string::npos)
+			continue; // blank entry (e.g. trailing ';')
+		size_t last = item.find_last_not_of(" \t\r\n");
+		maps.push_back(item.substr(first, last - first + 1));
+	}
+	if (maps.empty())
+		maps.push_back("EuroStadium_Night_P"); // fall back to the default
+	return maps;
+}
+
+string RLGymController::NextRotationMap() {
+	vector<string> maps = ParseMapList();
+	m_mapRotationIndex = (m_mapRotationIndex + 1) % maps.size();
+	return maps[m_mapRotationIndex];
+}
+
+void RLGymController::RebuildMatch(const string& reason) {
+	LOG("RLGymController::RebuildMatch: tearing down and recreating the match (" << reason << ").");
+
+	// Forget all per-match state so the normal InitGame -> settle -> claim -> spawn
+	// flow re-runs cleanly against the new level. We deliberately DON'T touch
+	// m_pendingInstr / m_awaitingState: if rlgym is blocked waiting on a STATE reply
+	// for a step it already sent, leaving those set lets the state loop answer it
+	// once the fresh roster settles, instead of hanging the training script.
+	m_roster.Reset();
+	m_autoJoinedBlue = false;
+	m_autoJoinAttempts = 0;
+	m_rosterAppliedForThisMatch = false;
+	m_matchRulesApplied = false;
+	m_roundActiveTicks = 0;
+	m_botLoadoutAppliedPris.clear();
+	m_strayBotAddressesPendingRemoval.clear();
+	m_carAddressToSpecId.clear();
+	m_disableBotFillLoggedCounts.clear();
+
+	matchSettings.mapName = NextRotationMap();
+	LOG("RLGymController::RebuildMatch: next map = " << matchSettings.mapName << ".");
+	MatchSetup::CreateMatch(m_plugin, matchSettings);
+	m_matchStartedMs = CUR_MS();
 }
 
 void RLGymController::ProcessPendingBotRemoval() {
@@ -319,7 +381,10 @@ void RLGymController::HandleConfig(const vector<float>& body) {
 
 	if (!m_matchCreateRequested) {
 		m_matchCreateRequested = true;
-		LOG("RLGymController::HandleConfig: requesting match creation.");
+		m_mapRotationIndex = 0;
+		matchSettings.mapName = ParseMapList()[0]; // first map in the rotation
+		m_matchStartedMs = CUR_MS();               // starts the map-rotation clock
+		LOG("RLGymController::HandleConfig: requesting match creation on map " << matchSettings.mapName << ".");
 		MatchSetup::CreateMatch(m_plugin, matchSettings);
 	}
 }

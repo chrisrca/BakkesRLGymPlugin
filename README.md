@@ -66,7 +66,8 @@ Settings live in the plugin's page in the BakkesMod settings window (F2 → Plug
 |---|---|---|---|
 | Car Body ID | `brlgym_car_body` | `23` (Octane) | e.g. `4284` = Fennec |
 | Bot Name | `brlgym_bot_name` | `Agent` | Name prefix for agents |
-| Map | `brlgym_map` | `EuroStadium_Night_P` | Any valid map name |
+| Map | `brlgym_map` | `EuroStadium_Night_P` | Any valid map name. Separate multiple with `;` (e.g. `Stadium_P;EuroStadium_P;cs_p`) to rotate through them in order — see Map rotation below. |
+| Map rotation | `brlgym_map_rotate_minutes` | `0` (off) | Rebuilds the match on this cadence, advancing through the `brlgym_map` list in order (a single map just reloads). Works around Rocket League's long-standing engine bug where nameplates stop rendering over time — a level reload is the only reliable way to restore them. Disruptive (full match reload), so off by default. |
 | Extra mutators | *(settings window)* | — | Comma-separated GameTags, appended to the built-in `BotsNone,UnlimitedTime,DisableGoalDelay,PlayerCount8` |
 
 > **Note:** These apply to the match created for the **first** connection. After changing them, reconnect (restart your training script) to rebuild the match. A mutator/GameTag reference is on the [BakkesMod wiki](https://bakkesmod.fandom.com/wiki/Unreal_command).

@@ -122,6 +122,15 @@ void BakkesRLGymPlugin::RenderSettings() {
 	renderCvarText("Bot Name", "brlgym_bot_name");
 	renderCvarText("Map", "brlgym_map");
 
+	{ // Map rotation backstop for RL's disappearing-nameplate engine bug
+		CVarWrapper rotateCvar = cvarManager->getCvar("brlgym_map_rotate_minutes");
+		if (rotateCvar) {
+			int minutes = rotateCvar.getIntValue();
+			if (ImGui::InputInt("Map rotation (minutes, 0=off)", &minutes))
+				rotateCvar.setValue(MAX(minutes, 0));
+		}
+	}
+
 	{ // Mutators / GameTags
 		constexpr int BUFFER_SIZE = 512;
 		static char tagsBuf[BUFFER_SIZE] = "";
