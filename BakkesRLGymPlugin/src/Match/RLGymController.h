@@ -14,6 +14,13 @@ public:
 	int carBodyId = 23; // Octane
 	string botNamePrefix = "Agent";
 
+	// How often (minutes) to tear down and rebuild the match on a fresh map. 0
+	// (default) disables. Rocket League has a long-standing engine bug where
+	// nameplates stop rendering over time (triggered by goals/replays/minimizing,
+	// worse on night maps) with no code-level fix - a level reload is the only
+	// reliable way to restore them, so this is an opt-in backstop.
+	int mapRotateMinutes = 0;
+
 	void OnLoad(BakkesMod::Plugin::BakkesModPlugin* plugin);
 	void OnUnload();
 
@@ -44,6 +51,19 @@ private:
 
 	// Applies BotLoadoutData
 	void ApplyBotLoadouts(ServerWrapper server);
+
+	// Start the next rotation map. Per-match state resets on the new match's
+	// InitGame (see m_rotationPending), not inline here.
+	void RebuildMatch(const string& reason);
+
+	// Clears per-match bookkeeping so a freshly loaded match re-claims from scratch.
+	void ResetForNewMatch();
+
+	// Parse m_mapRotationSpec (the brlgym_map value; ';'-delimited) into individual
+	// map names, trimmed and in order. Always returns at least one entry.
+	vector<string> ParseMapList() const;
+	// Advance the rotation index and return the next map to load.
+	string NextRotationMap();
 
 	BakkesMod::Plugin::BakkesModPlugin* m_plugin = nullptr;
 
@@ -91,4 +111,11 @@ private:
 	unordered_map<uintptr_t, int> m_carAddressToSpecId;
 
 	float m_lastWorldTime = -1;
+
+	// Map-rotation state (real wall-clock timer, so it's independent of game_speed).
+	long long m_matchStartedMs = 0;
+	size_t m_mapRotationIndex = 0;
+	string m_mapRotationSpec = "EuroStadium_Night_P"; // brlgym_map value; ';'-delimited rotates in order
+	bool m_rotationPending = false; // a rotation start was issued; reset state on the next InitGame
+	long long m_newMatchGraceUntilMs = 0; // after a rotation, do no setup until this real-time deadline (lets the 3-2-1 countdown finish)
 };

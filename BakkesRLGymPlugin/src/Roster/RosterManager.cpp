@@ -190,6 +190,11 @@ void RosterManager::SetActiveForReset(const vector<int>& specIds) {
 	}
 }
 
+void RosterManager::Reset() {
+	m_slots.clear();
+	m_lastWarnedStrayCount = -1;
+}
+
 vector<RosterManager::Slot> RosterManager::GetActiveSlots() const {
 	vector<Slot> result;
 	for (const auto& [specId, slot] : m_slots) {

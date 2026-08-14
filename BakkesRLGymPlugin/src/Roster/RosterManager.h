@@ -25,6 +25,10 @@ public:
 
 	void SetActiveForReset(const vector<int>& specIds);
 
+	// Forget all slot/PRI state. Used when the match is torn down and rebuilt
+	// (e.g. map rotation) so the next InitGame re-claims cars from scratch.
+	void Reset();
+
 	vector<Slot> GetActiveSlots() const;
 	optional<Slot> FindBySpecId(int specId) const;
 
